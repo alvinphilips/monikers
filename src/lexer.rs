@@ -29,22 +29,28 @@ impl Lexer {
                 if self.peek_char() == b'=' {
                     let ch = self.character;
                     self.read_char();
-                    Some(Token::new(TokenType::EQ, str::from_utf8(&[ch, self.character]).unwrap()))
+                    Some(Token::new(
+                        TokenType::EQ,
+                        str::from_utf8(&[ch, self.character]).unwrap(),
+                    ))
                 } else {
                     Some(Self::new_token(TokenType::ASSIGN, self.character))
                 }
-            },
+            }
             b'+' => Some(Self::new_token(TokenType::PLUS, self.character)),
             b'-' => Some(Self::new_token(TokenType::MINUS, self.character)),
             b'!' => {
                 if self.peek_char() == b'=' {
                     let ch = self.character;
                     self.read_char();
-                    Some(Token::new(TokenType::NE, str::from_utf8(&[ch, self.character]).unwrap()))
+                    Some(Token::new(
+                        TokenType::NE,
+                        str::from_utf8(&[ch, self.character]).unwrap(),
+                    ))
                 } else {
                     Some(Self::new_token(TokenType::BANG, self.character))
                 }
-            },
+            }
             b'*' => Some(Self::new_token(TokenType::ASTERISK, self.character)),
             b'/' => Some(Self::new_token(TokenType::SLASH, self.character)),
             b'<' => Some(Self::new_token(TokenType::LT, self.character)),
@@ -99,7 +105,9 @@ impl Lexer {
         }
         self.read_position -= 1;
 
-        return str::from_utf8(&self.input.as_bytes()[pos..self.position]).unwrap().into();
+        return str::from_utf8(&self.input.as_bytes()[pos..self.position])
+            .unwrap()
+            .into();
     }
 
     fn read_number(&mut self) -> String {
@@ -109,7 +117,9 @@ impl Lexer {
         }
         self.read_position -= 1;
 
-        return str::from_utf8(&self.input.as_bytes()[pos..self.position]).unwrap().into();
+        return str::from_utf8(&self.input.as_bytes()[pos..self.position])
+            .unwrap()
+            .into();
     }
 
     fn new_token(token_type: TokenType, character: u8) -> Token {
@@ -123,17 +133,22 @@ impl Lexer {
     fn skip_whitespace(&mut self) {
         while let Some(_) = match self.character {
             b' ' | b'\t' | b'\n' | b'\r' => Some(self.character),
-            _ => None
+            _ => None,
         } {
             self.read_char()
         }
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use crate::{
+        lexer::Lexer,
+        token::{Token, TokenType},
+    };
+
     #[test]
     fn test_next_token() {
-        use crate::token::{Token, TokenType};
         let input = r"let five = 5;
         let ten = 10;
 
@@ -230,10 +245,13 @@ mod tests {
             Token::new(TokenType::SEMICOLON, ";"),
         ];
 
-        let mut l = super::Lexer::new(input);
+        let mut l = Lexer::new(input);
 
         for expected in expected_tokens {
-            let tok: Token = l.next_token().expect(&format!("Expected Some(Token {:?}, Literal: {}), Got None.", expected.token_type, expected.literal));
+            let tok: Token = l.next_token().expect(&format!(
+                "Expected Some(Token {:?}, Literal: {}), Got None.",
+                expected.token_type, expected.literal
+            ));
 
             println!("{}, {}", tok.literal, expected.literal);
             assert_eq!(tok.token_type, expected.token_type);

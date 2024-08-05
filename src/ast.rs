@@ -6,11 +6,9 @@ pub trait Node: std::fmt::Debug + std::fmt::Display {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub trait Statement: Node {
-}
+pub trait Statement: Node {}
 
-pub trait Expression: Node {
-}
+pub trait Expression: Node {}
 
 #[derive(Debug, Default)]
 pub struct Program {
@@ -23,7 +21,7 @@ impl Node for Program {
             return "";
         }
 
-        return self.statements[0].token_literal()
+        return self.statements[0].token_literal();
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -61,7 +59,13 @@ impl Statement for LetStatement {}
 
 impl std::fmt::Display for LetStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} = {};", self.token_literal(), self.name, self.value)
+        write!(
+            f,
+            "{} {} = {};",
+            self.token_literal(),
+            self.name,
+            self.value
+        )
     }
 }
 
@@ -137,6 +141,15 @@ impl std::fmt::Display for Identifier {
     }
 }
 
+impl Identifier {
+    pub fn from_token(token: &Token) -> Self {
+        Self {
+            token: token.clone(),
+            value: token.literal.clone(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct IntegerLiteral {
     pub token: token::Token,
@@ -161,30 +174,157 @@ impl std::fmt::Display for IntegerLiteral {
     }
 }
 
-impl Identifier {
-    pub fn from_token(token: &Token) -> Self {
-        Self {
-            token: token.clone(),
-            value: token.literal.clone(),
+#[derive(Debug)]
+pub struct Boolean {
+    pub token: token::Token,
+    pub value: bool,
+}
+
+impl Node for Boolean {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for Boolean {}
+
+impl std::fmt::Display for Boolean {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.token.literal)
+    }
+}
+
+#[derive(Debug)]
+pub struct PrefixExpression {
+    pub token: Token,
+    pub operator: String,
+    pub right: Box<dyn Expression>,
+}
+
+impl Node for PrefixExpression {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for PrefixExpression {}
+
+impl std::fmt::Display for PrefixExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}{})", self.operator, self.right)
+    }
+}
+
+#[derive(Debug)]
+pub struct InfixExpression {
+    pub token: Token,
+    pub operator: String,
+    pub left: Box<dyn Expression>,
+    pub right: Box<dyn Expression>,
+}
+
+impl Node for InfixExpression {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for InfixExpression {}
+
+impl std::fmt::Display for InfixExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({} {} {})", self.left, self.operator, self.right)
+    }
+}
+
+#[derive(Debug)]
+pub struct IfExpression {
+    pub token: token::Token,
+    pub condition: Box<dyn Expression>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<BlockStatement>,
+}
+
+impl Node for IfExpression {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl std::fmt::Display for IfExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "if {} {}", self.condition, self.consequence)?;
+        if self.alternative.is_some() {
+            write!(f, " else {}", self.alternative.as_ref().unwrap())?;
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct BlockStatement {
+    pub token: Token,
+    pub statements: Vec<Box<dyn Statement>>,
+}
+
+impl Node for BlockStatement {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Statement for BlockStatement {}
+
+impl std::fmt::Display for BlockStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for stmt in &self.statements {
+            write!(f, "{}", stmt)?;
+        }
+
+        Ok(())
     }
 }
 
 mod tests {
-    use crate::token::{self, Token, TokenType};
-
+    #[allow(unused_imports)]
     use super::{LetStatement, Program, Statement};
+    #[allow(unused_imports)]
+    use crate::token::{self, Token, TokenType};
 
     #[test]
     fn test_string() {
         let program: Program = Program {
-            statements: vec![Box::new(
-                LetStatement {
-                    token: Token::new(TokenType::LET, "let"),
-                    name: super::Identifier { token:Token::new(TokenType::IDENT, "myVar"), value: "myVar".into() },
-                    value: Box::new(super::Identifier { token:Token::new(TokenType::IDENT, "anotherVar"), value: "anotherVar".into() }),
-                }
-            )],
+            statements: vec![Box::new(LetStatement {
+                token: Token::new(TokenType::LET, "let"),
+                name: super::Identifier {
+                    token: Token::new(TokenType::IDENT, "myVar"),
+                    value: "myVar".into(),
+                },
+                value: Box::new(super::Identifier {
+                    token: Token::new(TokenType::IDENT, "anotherVar"),
+                    value: "anotherVar".into(),
+                }),
+            })],
         };
 
         assert_eq!(format!("{}", program), "let myVar = anotherVar;")

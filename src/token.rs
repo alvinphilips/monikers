@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::Map;
 use lazy_static::lazy_static;
 
 #[derive(PartialEq, Clone, Copy, Debug, Default, Eq, Hash)]
@@ -78,8 +78,8 @@ impl std::fmt::Display for TokenType {
 }
 
 lazy_static! {
-    static ref Keywords: HashMap<String, TokenType> = {
-        let mut k = HashMap::new();
+    static ref Keywords: Map<String, TokenType> = {
+        let mut k = Map::new();
         k.insert("fn".to_string(), TokenType::FUNCTION);
         k.insert("let".to_string(), TokenType::LET);
         k.insert("if".to_string(), TokenType::IF);
@@ -105,6 +105,9 @@ pub struct Token {
 
 impl Token {
     pub fn new(token_type: TokenType, literal: &str) -> Self {
-        Token { token_type, literal: literal.into() }
+        Token {
+            token_type,
+            literal: literal.into(),
+        }
     }
 }
