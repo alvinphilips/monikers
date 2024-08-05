@@ -1,11 +1,25 @@
-use crate::{ast::{Expression, Identifier, LetStatement, Program, ReturnStatement, Statement}, lexer::Lexer, token::{self, TokenType}};
+use std::collections::HashMap;
 
-#[derive(Default, Debug)]
+use crate::{ast::{Expression, ExpressionStatement, Identifier, IntegerLiteral, LetStatement, Program, ReturnStatement, Statement}, lexer::Lexer, token::{self, TokenType}};
+
+pub enum OperatorPrecedence {
+    LOWEST,
+    EQUALS,
+    LESSGREATER,
+    SUM,
+    PRODUCT,
+    PREFIX,
+    CALL,
+}
+
+#[derive(Default)]
 pub struct Parser {
     lexer: Lexer,
     current_token: token::Token,
     peek_token: token::Token,
     pub errors: Vec<String>,
+    prefix_parse_fns: HashMap<TokenType, Box<PrefixFunc>>,
+    infix_parse_fns: HashMap<TokenType, Box<InfixFunc>>,
 }
 
 impl Parser {
@@ -15,10 +29,27 @@ impl Parser {
             ..Default::default()
         };
 
+        p.register_prefix(TokenType::IDENT, Box::new(Self::parse_identifier));
+        p.register_prefix(TokenType::INT, Box::new(Self::parse_integer_literal));
+
         p.next_token();
         p.next_token();
 
         p
+    }
+
+    fn parse_identifier(&self) -> Box<dyn Expression> {
+        return Box::new(Identifier {
+            token: self.current_token.clone(),
+            value: self.current_token.literal.clone(),
+        });
+    }
+
+    fn parse_integer_literal(&self) -> Box<dyn Expression> {
+        return Box::new(IntegerLiteral {
+            token: self.current_token.clone(),
+            value: self.current_token.literal.parse::<usize>().unwrap(),
+        });
     }
 
     pub fn next_token(&mut self) {
@@ -43,12 +74,15 @@ impl Parser {
         match self.current_token.token_type {
             TokenType::LET => self.parse_let_statement().and_then(|stmt| Some(Box::new(stmt) as Box<dyn Statement>)),
             TokenType::RETURN => self.parse_return_statement().and_then(|stmt| Some(Box::new(stmt) as Box<dyn Statement>)),
-            _ => None
+            _ => self.parse_expression_statement().and_then(|stmt| Some(Box::new(stmt) as Box<dyn Statement>)),
         }
     }
 
-    fn parse_expression(&mut self) -> Option<Box<dyn Expression>> {
-        Some(Box::new(Identifier::from_token(&self.current_token)))
+    fn parse_expression(&mut self, precedence: OperatorPrecedence) -> Option<Box<dyn Expression>> {
+        let prefix_fn = self.prefix_parse_fns.get(&self.current_token.token_type)?;
+        let left_expr = prefix_fn(&self);
+
+        Some(left_expr)
     }
 
     fn parse_let_statement(&mut self) -> Option<LetStatement> {
@@ -66,7 +100,7 @@ impl Parser {
             self.next_token()
         }
 
-        let value = self.parse_expression().unwrap();
+        let value = self.parse_expression(OperatorPrecedence::LOWEST).unwrap();
 
         Some(LetStatement { token, name, value })
     }
@@ -78,9 +112,21 @@ impl Parser {
             self.next_token()
         }
 
-        let return_value = self.parse_expression().unwrap();
+        let return_value = self.parse_expression(OperatorPrecedence::LOWEST).unwrap();
 
         Some(ReturnStatement { token, return_value })
+    }
+
+    fn parse_expression_statement(&mut self) -> Option<ExpressionStatement> {
+        let token = self.current_token.clone();
+
+        let expression = self.parse_expression(OperatorPrecedence::LOWEST)?;
+
+        if self.peek_token_is(TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        Some(ExpressionStatement { token, expression })
     }
 
     fn current_token_is(&self, check_type: TokenType) -> bool {
@@ -105,10 +151,21 @@ impl Parser {
         let msg = format!("Expected next token to be {:?}, got {:?} instead.", expected, self.current_token.token_type);
         self.errors.push(msg);
     }
+
+    fn register_prefix(&mut self, token_type: TokenType, func: Box<PrefixFunc>) {
+        self.prefix_parse_fns.insert(token_type, func);
+    }
+
+    fn register_infix(&mut self, token_type: TokenType, func: Box<InfixFunc>) {
+        self.infix_parse_fns.insert(token_type, func);
+    }
 }
 
+pub type PrefixFunc = dyn Fn(&Parser) -> Box<dyn Expression>;
+pub type InfixFunc = dyn Fn(Box<dyn Expression>) -> Box<dyn Expression>;
+
 mod tests {
-    use crate::{ast::{LetStatement, Node, ReturnStatement, Statement}, lexer::Lexer};
+    use crate::{ast::{ExpressionStatement, Identifier, IntegerLiteral, LetStatement, Node, ReturnStatement, Statement}, lexer::Lexer};
     use super::Parser;
 
     #[test]
@@ -150,6 +207,53 @@ mod tests {
             assert!(return_stmt.is_some());
             assert_eq!(return_stmt.unwrap().token_literal(), "return");
         }
+    }
+
+    #[test]
+    fn test_identifier_expression() {
+        let input = "foobar;";
+
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program().unwrap();
+        check_parser_errors(&parser);
+
+        assert_eq!(program.statements.len(), 1);
+
+        let expression_stmt = program.statements[0].as_any().downcast_ref::<ExpressionStatement>();
+        assert!(expression_stmt.is_some());
+
+        let expr = &expression_stmt.unwrap().expression;
+        let identifier = expr.as_any().downcast_ref::<Identifier>();
+        assert!(identifier.is_some());
+
+        assert_eq!(identifier.unwrap().value, "foobar");
+        assert_eq!(identifier.unwrap().token_literal(), "foobar");
+    }
+
+    #[test]
+    fn test_integer_literal_expression() {
+        let input = "5;";
+
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program().unwrap();
+        check_parser_errors(&parser);
+
+        assert_eq!(program.statements.len(), 1);
+
+        let expression_stmt = program.statements[0].as_any().downcast_ref::<ExpressionStatement>();
+        assert!(expression_stmt.is_some());
+
+        let expr = &expression_stmt.unwrap().expression;
+        let downcast_ref = expr.as_any().downcast_ref::<IntegerLiteral>();
+        let literal = downcast_ref;
+        assert!(literal.is_some());
+
+        assert_eq!(literal.unwrap().value, 5);
+        assert_eq!(literal.unwrap().token_literal(), "5");
     }
 
     #[allow(dead_code)]

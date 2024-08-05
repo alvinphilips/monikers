@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
-#[derive(PartialEq, Clone, Copy, Debug, Default)]
+#[derive(PartialEq, Clone, Copy, Debug, Default, Eq, Hash)]
 pub enum TokenType {
     #[default]
     ILLEGAL,
