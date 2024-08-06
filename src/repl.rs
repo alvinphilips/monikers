@@ -1,6 +1,6 @@
 use std::io::{Stdin, Stdout, Write};
 
-use crate::{lexer::Lexer, token::TokenType};
+use crate::{ast::Program, lexer::Lexer, parser::Parser, token::TokenType};
 
 const PROMPT: &'static str = ">> ";
 
@@ -15,13 +15,11 @@ pub fn start(stdin: Stdin, mut stdout: Stdout) {
             return;
         }
 
-        let mut lexer = Lexer::new(&buffer[..input]);
+        let lexer = Lexer::new(&buffer[..input]);
+        let mut parser = Parser::new(lexer);
 
-        while let Some(tok) = lexer.next_token() {
-            if tok.token_type == TokenType::EOF {
-                break;
-            }
-            println!("{:?}", tok);
+        if let Some(program) = parser.parse_program() {
+            println!("{}", program);
         }
 
         buffer.clear();

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Boolean, InfixExpression},
+    ast::{BlockStatement, Boolean, IfExpression, InfixExpression},
     Map,
 };
 use thiserror::Error;
@@ -70,6 +70,7 @@ impl Parser {
         p.register_prefix(TokenType::TRUE, Self::parse_boolean);
         p.register_prefix(TokenType::FALSE, Self::parse_boolean);
         p.register_prefix(TokenType::LPAREN, Self::parse_grouped_expression);
+        p.register_prefix(TokenType::IF, Self::parse_if_expression);
 
         p.register_infix(TokenType::PLUS, Self::parse_infix_expression);
         p.register_infix(TokenType::MINUS, Self::parse_infix_expression);
@@ -248,6 +249,37 @@ impl Parser {
         Some(ExpressionStatement { token, expression })
     }
 
+    fn parse_if_expression(&mut self) -> Box<dyn Expression> {
+        let token = self.current_token.clone();
+
+        assert!(self.expect_peek(TokenType::LPAREN));
+
+        self.next_token();
+
+        let condition = self.parse_expression(OperatorPrecedence::LOWEST).unwrap();
+
+        assert!(self.expect_peek(TokenType::RPAREN));
+        assert!(self.expect_peek(TokenType::LBRACE));
+
+        let consequence = self.parse_block_statement();
+
+        Box::new(IfExpression { token, condition, consequence, alternative: None})
+    }
+
+    fn parse_block_statement(&mut self) -> BlockStatement {
+        let mut block = BlockStatement {token: self.current_token.clone(), statements: Vec::new()};
+
+        self.next_token();
+
+        while !self.current_token_is(TokenType::RBRACE) && !self.current_token_is(TokenType::EOF) {
+            if let Some(stmt) = self.parse_statement() {
+                block.statements.push(stmt);
+            }
+            self.next_token();
+        }
+        block
+    }
+
     fn parse_boolean(&mut self) -> Box<dyn Expression> {
         Box::new(Boolean {
             token: self.current_token.clone(),
@@ -312,7 +344,7 @@ mod tests {
     use std::usize;
 
     use super::Parser;
-    use crate::ast::{Boolean, InfixExpression};
+    use crate::ast::{Boolean, IfExpression, InfixExpression};
     #[allow(unused_imports)]
     use crate::{
         ast::{
@@ -671,6 +703,35 @@ mod tests {
             assert_eq!(format!("{}", program), test.expected)
         }
     }
+
+    
+
+        #[test]
+        fn test_if_expression() {
+            let input = "if (x < y) { x }";
+
+            let lexer = Lexer::new(input);
+            let mut parser = Parser::new(lexer);
+
+            let program = parser.parse_program().unwrap();
+            check_parser_errors(&parser);
+
+            assert_eq!(program.statements.len(), 1);
+
+            let if_stmt = program.statements[0]
+                .as_any().downcast_ref::<ExpressionStatement>().unwrap()
+                .expression.as_any().downcast_ref::<IfExpression>().unwrap();
+
+            test_infix_expression(&if_stmt.condition, "x".into(), "<", "y".into());
+
+            assert_eq!(if_stmt.consequence.statements.len(), 1);
+
+            let consequence = if_stmt.consequence.statements[0].as_any().downcast_ref::<ExpressionStatement>().unwrap();
+
+            test_identifier(&consequence.expression, "x");
+
+            assert!(if_stmt.alternative.is_none());
+        }
 
     fn test_let_statement(statement: &Box<dyn Statement>, name: &str) {
         assert_eq!(statement.token_literal(), "let");
