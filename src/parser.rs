@@ -36,8 +36,6 @@ pub enum ParserError {
     UnexpectedToken(TokenType, TokenType),
     #[error("reached end of stream while parsing.")]
     ReachedEndOfStream,
-    #[error("{0:?}")]
-    CombinedErrors(Vec<eyre::Report>),
 }
 
 pub type PrefixFunc = fn(&mut Parser) -> Result<Box<dyn Expression>>;
@@ -78,6 +76,7 @@ impl Parser {
         p.precedences
             .insert(TokenType::SLASH, OperatorPrecedence::PRODUCT);
 
+        p.register_prefix(TokenType::EOF, Self::parse_unexpected_eof);
         p.register_prefix(TokenType::IDENT, Self::parse_identifier);
         p.register_prefix(TokenType::INT, Self::parse_integer_literal);
         p.register_prefix(TokenType::BANG, Self::parse_prefix_expression);
@@ -121,7 +120,7 @@ impl Parser {
         self.peek_token = self.lexer.next_token().unwrap();
     }
 
-    pub fn parse_program(&mut self) -> Result<Program> {
+    pub fn parse_program(&mut self) -> Result<Program, Vec<eyre::Report>> {
         let mut program = Program::default();
 
         let mut errors = Vec::new();
@@ -136,7 +135,7 @@ impl Parser {
         }
 
         if !errors.is_empty() {
-            Err(ParserError::CombinedErrors(errors))?;
+            Err(errors)?;
         }
 
         Ok(program)
@@ -311,6 +310,10 @@ impl Parser {
         }))
     }
 
+    fn parse_unexpected_eof(&mut self) -> Result<Box<dyn Expression>> {
+        Err(ParserError::ReachedEndOfStream)?
+    }
+
     fn current_token_is(&self, check_type: TokenType) -> bool {
         self.current_token.token_type == check_type
     }
@@ -324,7 +327,7 @@ impl Parser {
             self.next_token();
             Ok(())
         } else {
-            Err(ParserError::UnexpectedToken(expected, self.current_token.token_type))?
+            Err(ParserError::UnexpectedToken(expected, self.peek_token.token_type))?
         }
     }
 

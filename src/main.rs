@@ -8,7 +8,7 @@ fn main() -> Result<()> {
         let file = std::fs::read_to_string(path)?;
         let lexer = Lexer::new(&file);
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program()?;
+        let program = parser.parse_program().unwrap();
         println!("{program}")
     } else {
         repl::start(std::io::stdin(), std::io::stdout());

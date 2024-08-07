@@ -21,7 +21,9 @@ pub fn start(stdin: Stdin, mut stdout: Stdout) {
         match parser.parse_program() {
             Ok(program) => println!("{program}"),
             Err(errors) => {
-                eprintln!("{errors}");
+                for error in errors {
+                    eprintln!("{error:#}")
+                }
             }
         }
 
