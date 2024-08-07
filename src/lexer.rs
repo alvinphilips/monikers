@@ -1,6 +1,13 @@
 use core::str;
+use thiserror::Error;
 
 use crate::token::{Token, TokenType};
+
+#[derive(Debug, Error)]
+pub enum LexerError {
+    #[error("failed to parse token '{0}'")]
+    FailedToParse(u8),
+}
 
 #[derive(Default, Debug)]
 pub struct Lexer {
@@ -20,63 +27,63 @@ impl Lexer {
         l
     }
 
-    pub fn next_token(&mut self) -> Option<Token> {
+    pub fn next_token(&mut self) -> Result<Token, LexerError> {
         self.skip_whitespace();
 
         let token = match self.character {
-            b'\0' => Some(Self::new_token(TokenType::EOF, self.character)),
+            b'\0' => Self::new_token(TokenType::EOF, self.character),
             b'=' => {
                 if self.peek_char() == b'=' {
                     let ch = self.character;
                     self.read_char();
-                    Some(Token::new(
+                    Token::new(
                         TokenType::EQ,
                         str::from_utf8(&[ch, self.character]).unwrap(),
-                    ))
+                    )
                 } else {
-                    Some(Self::new_token(TokenType::ASSIGN, self.character))
+                    Self::new_token(TokenType::ASSIGN, self.character)
                 }
             }
-            b'+' => Some(Self::new_token(TokenType::PLUS, self.character)),
-            b'-' => Some(Self::new_token(TokenType::MINUS, self.character)),
+            b'+' => Self::new_token(TokenType::PLUS, self.character),
+            b'-' => Self::new_token(TokenType::MINUS, self.character),
             b'!' => {
                 if self.peek_char() == b'=' {
                     let ch = self.character;
                     self.read_char();
-                    Some(Token::new(
+                    Token::new(
                         TokenType::NE,
                         str::from_utf8(&[ch, self.character]).unwrap(),
-                    ))
+                    )
                 } else {
-                    Some(Self::new_token(TokenType::BANG, self.character))
+                    Self::new_token(TokenType::BANG, self.character)
                 }
             }
-            b'*' => Some(Self::new_token(TokenType::ASTERISK, self.character)),
-            b'/' => Some(Self::new_token(TokenType::SLASH, self.character)),
-            b'<' => Some(Self::new_token(TokenType::LT, self.character)),
-            b'>' => Some(Self::new_token(TokenType::GT, self.character)),
-            b'(' => Some(Self::new_token(TokenType::LPAREN, self.character)),
-            b')' => Some(Self::new_token(TokenType::RPAREN, self.character)),
-            b'{' => Some(Self::new_token(TokenType::LBRACE, self.character)),
-            b'}' => Some(Self::new_token(TokenType::RBRACE, self.character)),
-            b',' => Some(Self::new_token(TokenType::COMMA, self.character)),
-            b';' => Some(Self::new_token(TokenType::SEMICOLON, self.character)),
+            b'*' => Self::new_token(TokenType::ASTERISK, self.character),
+            b'/' => Self::new_token(TokenType::SLASH, self.character),
+            b'<' => Self::new_token(TokenType::LT, self.character),
+            b'>' => Self::new_token(TokenType::GT, self.character),
+            b'(' => Self::new_token(TokenType::LPAREN, self.character),
+            b')' => Self::new_token(TokenType::RPAREN, self.character),
+            b'{' => Self::new_token(TokenType::LBRACE, self.character),
+            b'}' => Self::new_token(TokenType::RBRACE, self.character),
+            b',' => Self::new_token(TokenType::COMMA, self.character),
+            b';' => Self::new_token(TokenType::SEMICOLON, self.character),
             _ => {
                 if Self::is_letter(self.character) {
                     let literal = self.read_identifier();
                     let tok_type = TokenType::lookup_ident(&literal);
-                    Some(Token::new(tok_type, &literal))
+                    Token::new(tok_type, &literal)
                 } else if self.character.is_ascii_digit() {
-                    Some(Token::new(TokenType::INT, &self.read_number()))
+                    Token::new(TokenType::INT, &self.read_number())
                 } else {
-                    None
+                    Err(LexerError::FailedToParse(self.character))?
                 }
             }
         };
 
         self.read_char();
 
-        token
+        Ok(token)
     }
 
     fn read_char(&mut self) {
