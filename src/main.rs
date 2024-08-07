@@ -1,6 +1,6 @@
 use lexer::Lexer;
 use monikers::*;
-use eyre::Result;
+use color_eyre::Result;
 use parser::Parser;
 
 fn main() -> Result<()> {

@@ -129,10 +129,10 @@ impl Parser {
             match self.parse_statement() {
                 Ok(stmt) => {
                     program.statements.push(stmt);
-                    self.next_token();
                 },
                 Err(error) => errors.push(error)
             }
+            self.next_token();
         }
 
         if !errors.is_empty() {
@@ -144,12 +144,9 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Result<Box<dyn Statement>> {
         match self.current_token.token_type {
-            TokenType::LET => self
-                .parse_let_statement(),
-            TokenType::RETURN => self
-                .parse_return_statement(),
-            _ => self
-                .parse_expression_statement(),
+            TokenType::LET => self.parse_let_statement(),
+            TokenType::RETURN => self.parse_return_statement(),
+            _ => self.parse_expression_statement(),
         }
     }
 
@@ -282,6 +279,9 @@ impl Parser {
 
         let alternative = if self.peek_token_is(TokenType::ELSE) {
             self.next_token();
+
+            self.expect_peek(TokenType::LBRACE)?;
+
             Some(self.parse_block_statement()?)
         } else {
             None
@@ -300,7 +300,7 @@ impl Parser {
             block.statements.push(stmt);
             self.next_token();
         }
-        
+
         Ok(block)
     }
 
