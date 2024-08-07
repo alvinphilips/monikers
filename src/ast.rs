@@ -121,7 +121,7 @@ impl std::fmt::Display for ExpressionStatement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Identifier {
     pub token: token::Token,
     pub value: String,
@@ -312,6 +312,62 @@ impl std::fmt::Display for BlockStatement {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct FunctionLiteral {
+    pub token: Token,
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
+}
+
+impl Node for FunctionLiteral {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for FunctionLiteral {}
+
+impl std::fmt::Display for FunctionLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}(", self.token_literal())?;
+        let parameters = self.parameters.iter().map(|param| format!("{param}")).collect::<Vec<_>>().join(", ");
+        write!(f, "{parameters}")?;
+
+        write!(f, ") {}", self.body)
+    }
+}
+
+#[derive(Debug)]
+pub struct CallExpression {
+    pub token: Token,
+    pub function: Box<dyn Expression>,
+    pub arguments: Vec<Box<dyn Expression>>,
+}
+
+impl Node for CallExpression {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for CallExpression {}
+
+impl std::fmt::Display for CallExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}(", self.function)?;
+        let parameters = self.arguments.iter().map(|param| format!("{param}")).collect::<Vec<_>>().join(", ");
+        write!(f, "{parameters})")
     }
 }
 
