@@ -80,18 +80,19 @@ impl std::fmt::Display for TokenType {
 lazy_static! {
     static ref Keywords: Map<String, TokenType> = {
         let mut k = Map::new();
-        k.insert("fn".to_string(), TokenType::FUNCTION);
-        k.insert("let".to_string(), TokenType::LET);
-        k.insert("if".to_string(), TokenType::IF);
-        k.insert("else".to_string(), TokenType::ELSE);
-        k.insert("return".to_string(), TokenType::RETURN);
-        k.insert("true".to_string(), TokenType::TRUE);
-        k.insert("false".to_string(), TokenType::FALSE);
+        k.insert("fn".to_owned(), TokenType::FUNCTION);
+        k.insert("let".to_owned(), TokenType::LET);
+        k.insert("if".to_owned(), TokenType::IF);
+        k.insert("else".to_owned(), TokenType::ELSE);
+        k.insert("return".to_owned(), TokenType::RETURN);
+        k.insert("true".to_owned(), TokenType::TRUE);
+        k.insert("false".to_owned(), TokenType::FALSE);
         k
     };
 }
 
 impl TokenType {
+    #[inline]
     pub fn lookup_ident(identifier: &str) -> TokenType {
         *Keywords.get(identifier).unwrap_or(&Self::IDENT)
     }
@@ -104,6 +105,7 @@ pub struct Token {
 }
 
 impl Token {
+    #[inline]
     pub fn new(token_type: TokenType, literal: &str) -> Self {
         Token {
             token_type,

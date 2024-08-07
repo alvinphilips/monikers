@@ -3,6 +3,7 @@ use crate::{
     Map,
 };
 use thiserror::Error;
+use eyre::Result;
 
 use crate::{
     ast::{
@@ -33,7 +34,14 @@ pub enum ParserError {
     PrefixFnMissing(TokenType),
     #[error("unexpected token. expected: `{0}`, got: `{1}`")]
     UnexpectedToken(TokenType, TokenType),
+    #[error("reached end of stream while parsing.")]
+    ReachedEndOfStream,
+    #[error("{0:?}")]
+    CombinedErrors(Vec<eyre::Report>),
 }
+
+pub type PrefixFunc = fn(&mut Parser) -> Result<Box<dyn Expression>>;
+pub type InfixFunc = fn(&mut Parser, Box<dyn Expression>) -> Result<Box<dyn Expression>>;
 
 #[derive(Default)]
 pub struct Parser {
@@ -94,18 +102,18 @@ impl Parser {
         p
     }
 
-    fn parse_identifier(&mut self) -> Result<Box<dyn Expression>, ParserError> {
+    fn parse_identifier(&mut self) -> Result<Box<dyn Expression>> {
         Ok(Box::new(Identifier {
             token: self.current_token.clone(),
             value: self.current_token.literal.clone(),
         }))
     }
 
-    fn parse_integer_literal(&mut self) -> Result<Box<dyn Expression>, ParserError> {
-        return Ok(Box::new(IntegerLiteral {
+    fn parse_integer_literal(&mut self) -> Result<Box<dyn Expression>> {
+        Ok(Box::new(IntegerLiteral {
             token: self.current_token.clone(),
             value: self.current_token.literal.parse::<usize>()?,
-        }));
+        }))
     }
 
     pub fn next_token(&mut self) {
@@ -113,19 +121,28 @@ impl Parser {
         self.peek_token = self.lexer.next_token().unwrap();
     }
 
-    pub fn parse_program(&mut self) -> Result<Program, ParserError> {
+    pub fn parse_program(&mut self) -> Result<Program> {
         let mut program = Program::default();
 
+        let mut errors = Vec::new();
         while !self.current_token_is(TokenType::EOF) {
-            let stmt = self.parse_statement()?;
-            program.statements.push(stmt);
-            self.next_token();
+            match self.parse_statement() {
+                Ok(stmt) => {
+                    program.statements.push(stmt);
+                    self.next_token();
+                },
+                Err(error) => errors.push(error)
+            }
+        }
+
+        if !errors.is_empty() {
+            Err(ParserError::CombinedErrors(errors))?;
         }
 
         Ok(program)
     }
 
-    fn parse_statement(&mut self) -> Result<Box<dyn Statement>, ParserError> {
+    fn parse_statement(&mut self) -> Result<Box<dyn Statement>> {
         match self.current_token.token_type {
             TokenType::LET => self
                 .parse_let_statement(),
@@ -136,7 +153,7 @@ impl Parser {
         }
     }
 
-    fn parse_expression(&mut self, precedence: OperatorPrecedence) -> Result<Box<dyn Expression>, ParserError> {
+    fn parse_expression(&mut self, precedence: OperatorPrecedence) -> Result<Box<dyn Expression>> {
         let token_type = self.current_token.token_type;
         let prefix_fn = {
             self.prefix_parse_fns
@@ -146,10 +163,10 @@ impl Parser {
 
         let mut left_expr = prefix_fn(self)?;
 
-        while !self.peek_token_is(TokenType::SEMICOLON) && precedence < self.peek_precedence() {
+        while !self.peek_token_is(TokenType::SEMICOLON) && precedence < self.peek_precedence()? {
             if let Some(&infix_fn) = self.infix_parse_fns.get(&self.peek_token.token_type) {
                 self.next_token();
-                left_expr = infix_fn(self, left_expr);
+                left_expr = infix_fn(self, left_expr)?;
             } else {
                 return Ok(left_expr);
             }
@@ -158,7 +175,7 @@ impl Parser {
         Ok(left_expr)
     }
 
-    fn parse_prefix_expression(&mut self) -> Result<Box<dyn Expression>, ParserError> {
+    fn parse_prefix_expression(&mut self) -> Result<Box<dyn Expression>> {
         let token = self.current_token.clone();
         let operator = self.current_token.literal.clone();
 
@@ -173,42 +190,39 @@ impl Parser {
         }))
     }
 
-    fn parse_infix_expression(&mut self, left: Box<dyn Expression>) -> Box<dyn Expression> {
+    fn parse_infix_expression(&mut self, left: Box<dyn Expression>) -> Result<Box<dyn Expression>> {
         let token = self.current_token.clone();
         let operator = self.current_token.literal.clone();
 
         let precedence = self.current_precedence();
         self.next_token();
-        let right = self.parse_expression(precedence).unwrap();
+        let right = self.parse_expression(precedence)?;
 
-        Box::new(InfixExpression {
+        Ok(Box::new(InfixExpression {
             token,
             left,
             operator,
             right,
-        })
+        }))
     }
 
-    fn parse_grouped_expression(&mut self) -> Result<Box<dyn Expression>, ParserError> {
+    fn parse_grouped_expression(&mut self) -> Result<Box<dyn Expression>> {
         self.next_token();
 
         let expr = self.parse_expression(OperatorPrecedence::LOWEST)?;
 
-        assert!(self.expect_peek(TokenType::RPAREN));
+        self.expect_peek(TokenType::RPAREN)?;
 
         Ok(expr)
     }
 
-    fn parse_let_statement(&mut self) -> Result<Box<dyn Statement>, ParserError> {
+    fn parse_let_statement(&mut self) -> Result<Box<dyn Statement>> {
         let token = self.current_token.clone();
-        if !self.expect_peek(TokenType::IDENT) {
-            Err(ParserError::UnexpectedToken(TokenType::IDENT, self.current_token.token_type))?;
-        }
+
+        self.expect_peek(TokenType::IDENT)?;
         let name = Identifier::from_token(&self.current_token);
 
-        if !self.expect_peek(TokenType::ASSIGN) {
-            Err(ParserError::UnexpectedToken(TokenType::ASSIGN, self.current_token.token_type))?;
-        }
+        self.expect_peek(TokenType::ASSIGN)?;
 
         while !self.current_token_is(TokenType::SEMICOLON) {
             self.next_token()
@@ -222,7 +236,7 @@ impl Parser {
         Ok(Box::new(LetStatement { token, name, value }))
     }
 
-    fn parse_return_statement(&mut self) -> Result<Box<dyn Statement>, ParserError> {
+    fn parse_return_statement(&mut self) -> Result<Box<dyn Statement>> {
         let token = self.current_token.clone();
 
         while !self.current_token_is(TokenType::SEMICOLON) {
@@ -240,7 +254,7 @@ impl Parser {
         }))
     }
 
-    fn parse_expression_statement(&mut self) -> Result<Box<dyn Statement>, ParserError> {
+    fn parse_expression_statement(&mut self) -> Result<Box<dyn Statement>> {
         let token = self.current_token.clone();
 
         let expression = self.parse_expression(OperatorPrecedence::LOWEST)?;
@@ -252,38 +266,45 @@ impl Parser {
         Ok(Box::new(ExpressionStatement { token, expression }))
     }
 
-    fn parse_if_expression(&mut self) -> Result<Box<dyn Expression>, ParserError> {
+    fn parse_if_expression(&mut self) -> Result<Box<dyn Expression>> {
         let token = self.current_token.clone();
 
-        assert!(self.expect_peek(TokenType::LPAREN));
+        self.expect_peek(TokenType::LPAREN)?;
 
         self.next_token();
 
         let condition = self.parse_expression(OperatorPrecedence::LOWEST)?;
 
-        assert!(self.expect_peek(TokenType::RPAREN));
-        assert!(self.expect_peek(TokenType::LBRACE));
+        self.expect_peek(TokenType::RPAREN)?;
+        self.expect_peek(TokenType::LBRACE)?;
 
-        let consequence = self.parse_block_statement();
+        let consequence = self.parse_block_statement()?;
 
-        Ok(Box::new(IfExpression { token, condition, consequence, alternative: None}))
+        let alternative = if self.peek_token_is(TokenType::ELSE) {
+            self.next_token();
+            Some(self.parse_block_statement()?)
+        } else {
+            None
+        };
+
+        Ok(Box::new(IfExpression { token, condition, consequence, alternative}))
     }
 
-    fn parse_block_statement(&mut self) -> BlockStatement {
+    fn parse_block_statement(&mut self) -> Result<BlockStatement> {
         let mut block = BlockStatement {token: self.current_token.clone(), statements: Vec::new()};
 
         self.next_token();
 
         while !self.current_token_is(TokenType::RBRACE) && !self.current_token_is(TokenType::EOF) {
-            if let Ok(stmt) = self.parse_statement() {
-                block.statements.push(stmt);
-            }
+            let stmt = self.parse_statement()?;
+            block.statements.push(stmt);
             self.next_token();
         }
-        block
+        
+        Ok(block)
     }
 
-    fn parse_boolean(&mut self) -> Result<Box<dyn Expression>, ParserError> {
+    fn parse_boolean(&mut self) -> Result<Box<dyn Expression>> {
         Ok(Box::new(Boolean {
             token: self.current_token.clone(),
             value: self.current_token_is(TokenType::TRUE),
@@ -298,21 +319,23 @@ impl Parser {
         self.peek_token.token_type == check_type
     }
 
-    fn expect_peek(&mut self, expected: TokenType) -> bool {
+    fn expect_peek(&mut self, expected: TokenType) -> Result<()> {
         if self.peek_token_is(expected) {
             self.next_token();
-            true
+            Ok(())
         } else {
-            self.peek_error(&expected);
-            false
+            Err(ParserError::UnexpectedToken(expected, self.current_token.token_type))?
         }
     }
 
-    fn peek_precedence(&self) -> OperatorPrecedence {
-        self.precedences
+    fn peek_precedence(&self) -> Result<OperatorPrecedence> {
+        if self.current_token_is(TokenType::EOF) && self.peek_token_is(TokenType::EOF) {
+            Err(ParserError::ReachedEndOfStream)?;
+        }
+        Ok(self.precedences
             .get(&self.peek_token.token_type)
             .copied()
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 
     fn current_precedence(&self) -> OperatorPrecedence {
@@ -320,14 +343,6 @@ impl Parser {
             .get(&self.current_token.token_type)
             .copied()
             .unwrap_or_default()
-    }
-
-    fn peek_error(&mut self, expected: &TokenType) {
-        let msg = format!(
-            "Expected next token to be {:?}, got {:?} instead.",
-            expected, self.current_token.token_type
-        );
-        self.errors.push(msg);
     }
 
     fn register_prefix(&mut self, token_type: TokenType, func: PrefixFunc) {
@@ -338,9 +353,6 @@ impl Parser {
         self.infix_parse_fns.insert(token_type, func);
     }
 }
-
-pub type PrefixFunc = fn(&mut Parser) -> Result<Box<dyn Expression>, ParserError>;
-pub type InfixFunc = fn(&mut Parser, Box<dyn Expression>) -> Box<dyn Expression>;
 
 #[cfg(test)]
 mod tests {

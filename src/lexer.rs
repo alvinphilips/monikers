@@ -1,5 +1,6 @@
 use core::str;
 use thiserror::Error;
+use eyre::Result;
 
 use crate::token::{Token, TokenType};
 
@@ -27,7 +28,7 @@ impl Lexer {
         l
     }
 
-    pub fn next_token(&mut self) -> Result<Token, LexerError> {
+    pub fn next_token(&mut self) -> Result<Token> {
         self.skip_whitespace();
 
         let token = match self.character {
@@ -107,26 +108,26 @@ impl Lexer {
 
     fn read_identifier(&mut self) -> String {
         let pos = self.position;
+
         while Self::is_letter(self.character) {
             self.read_char()
         }
+
         self.read_position -= 1;
 
-        return str::from_utf8(&self.input.as_bytes()[pos..self.position])
-            .unwrap()
-            .into();
+        self.input[pos..self.position].into()
     }
 
     fn read_number(&mut self) -> String {
         let pos = self.position;
+
         while self.character.is_ascii_digit() {
             self.read_char()
         }
+
         self.read_position -= 1;
 
-        return str::from_utf8(&self.input.as_bytes()[pos..self.position])
-            .unwrap()
-            .into();
+        self.input[pos..self.position].into()
     }
 
     fn new_token(token_type: TokenType, character: u8) -> Token {
@@ -134,14 +135,14 @@ impl Lexer {
     }
 
     fn is_letter(character: u8) -> bool {
-        return character.is_ascii_alphabetic() || character == b'_';
+        character.is_ascii_alphabetic() || character == b'_'
     }
 
     fn skip_whitespace(&mut self) {
-        while let Some(_) = match self.character {
+        while (match self.character {
             b' ' | b'\t' | b'\n' | b'\r' => Some(self.character),
             _ => None,
-        } {
+        }).is_some() {
             self.read_char()
         }
     }

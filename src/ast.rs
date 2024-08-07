@@ -17,7 +17,7 @@ pub struct Program {
 
 impl Node for Program {
     fn token_literal(&self) -> &str {
-        if self.statements.len() == 0 {
+        if self.statements.is_empty() {
             return "";
         }
 
@@ -31,8 +31,12 @@ impl Node for Program {
 
 impl std::fmt::Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for stmt in &self.statements {
-            write!(f, "{}", stmt)?;
+        for (i, stmt) in self.statements.iter().enumerate() {
+            if i == self.statements.len() - 1 {
+                write!(f, "{stmt}")?;
+            } else {
+                writeln!(f, "{stmt}")?;
+            }
         }
         Ok(())
     }
@@ -47,7 +51,7 @@ pub struct LetStatement {
 
 impl Node for LetStatement {
     fn token_literal(&self) -> &str {
-        return &self.token.literal;
+        &self.token.literal
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -77,7 +81,7 @@ pub struct ReturnStatement {
 
 impl Node for ReturnStatement {
     fn token_literal(&self) -> &str {
-        return &self.token.literal;
+        &self.token.literal
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -101,7 +105,7 @@ pub struct ExpressionStatement {
 
 impl Node for ExpressionStatement {
     fn token_literal(&self) -> &str {
-        return &self.token.literal;
+        &self.token.literal
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -125,7 +129,7 @@ pub struct Identifier {
 
 impl Node for Identifier {
     fn token_literal(&self) -> &str {
-        return &self.token.literal;
+        &self.token.literal
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -158,7 +162,7 @@ pub struct IntegerLiteral {
 
 impl Node for IntegerLiteral {
     fn token_literal(&self) -> &str {
-        return &self.token.literal;
+        &self.token.literal
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -299,8 +303,12 @@ impl Statement for BlockStatement {}
 
 impl std::fmt::Display for BlockStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for stmt in &self.statements {
-            write!(f, "{}", stmt)?;
+        for (i, stmt) in self.statements.iter().enumerate() {
+            if i == self.statements.len() - 1 {
+                write!(f, "{stmt}")?;
+            } else {
+                writeln!(f, "{stmt}")?;
+            }
         }
 
         Ok(())
